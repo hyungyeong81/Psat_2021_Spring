@@ -1,0 +1,233 @@
+---
+title: "week3_assignment_2019313106홍현경"
+author: "Hyungyeong Hong"
+date: "3/23/2021"
+output: html_document
+---
+## Chapter 1. 모델링을 위한 전처리
+### 문제 0. 기본 세팅
+```{r ch1_q0_setting, message=FALSE}
+# 라이브러리 불러오기
+library(tidyverse)
+library(data.table)
+library(gridExtra)
+
+# 파일 경로 설정
+setwd("/Users/hyungyeonghong/Desktop/P-Sat/week3")
+
+# 파일 불러오기
+data <- fread("data.csv")
+test <- fread("test.csv")
+```
+
+### [Train data(data.csv) 전처리 및 EDA]
+### 문제 1. 'bmi'변수를 numeric자료형으로 바꾸고, NA값을 mean imputation으로 바꾸기
+```{r ch1_q1_bmi, warning=FALSE}
+data %>% head(10) # 불러온 data 형태 확인
+
+data$bmi <- data$bmi %>% as.numeric # bmi 변수 numeric으로 바꾸기
+data$bmi <- data$bmi %>% replace_na(., mean(., na.rm=TRUE)) # mean imputation #tidyverse의 replace_na() 이용
+
+data$bmi %>% is.na %>% sum # NA 지워졌는지 확인
+```
+
+### 문제 2.
+```{r ch1_q2_factor}
+char_cols <- data %>% select(is.character) %>% colnames # character형 변수명 뽑아내기
+data[,char_cols] <- data %>% select(where(is.character)) %>% lapply(as.factor) # character형 변수를 factor로 바꾼 후 data 업데이트
+```
+select(where(is.character)) 에서 where() 쓰지 않았을 때
+Predicate functions must be wrapped in `where()`이라는 경고 메시지가 출력되어 수정함
+
+### 문제 3.
+```{r ch1_q3_deleteID}
+data <- data %>% select(-"id") # data의 id 변수 제거, tidyverse(dplyr)의 select 이용
+```
+
+### 문제 4.
+
+heart_disease, hypertension, stroke 변수 역시 0과 1로 구분되어 있으므로 factor 처리
+두 변수는 numeric meaning이 없는 범주형 자료에 해당함
+```{r ch1_q4_factor}
+data$heart_disease <- data$heart_disease %>% as.factor
+data$hypertension <- data$hypertension %>% as.factor
+data$stroke  <- data$stroke %>% as.factor
+```
+
+```{r ch1_q4_dfSplit, warning=FALSE}
+# factor_cols: 범주형 자료 변수 이름 벡터
+factor_cols <- data %>% select(where(is.factor)) %>% colnames
+
+stroke1_df <- data %>% select(all_of(factor_cols)) %>%
+  filter(stroke==1) %>% gather(key="variable", value="value", -stroke) %>% 
+  select(-stroke)
+stroke0_df <- data %>% select(all_of(factor_cols)) %>%
+  filter(stroke==0) %>% gather(key="variable", value="value", -stroke) %>%
+  select(-stroke)
+
+# gather()의 결과 확인
+stroke1_df %>% head(10)
+stroke0_df %>% head(10)
+```
+select(all_of(cols), "stroke")에서 all_of() 쓰지 않았을 때
+Note: Using an external vector in selections is ambiguous.가 출력되어 수정함
+
+```{r ch1_q4_visualization, fig.width=15, fig.height=6}
+bar_plot1 <- stroke1_df %>% ggplot(aes(x=variable, fill=value))+
+  geom_bar(position="fill", alpha=0.5)+
+  coord_flip()+
+  ggtitle("Stroke: 1")+
+  ylab(NULL)+
+  theme_classic()+
+  theme(plot.title=element_text(face="bold", size=12, hjust=0.5), legend.position="bottom", legend.title=element_blank())
+
+bar_plot0 <- stroke0_df %>% ggplot(aes(x=variable, fill=value))+
+  geom_bar(position="fill", alpha=0.5)+
+  coord_flip()+
+  ggtitle("Stroke: 0")+
+  ylab(NULL)+
+  theme_classic()+
+  theme(plot.title=element_text(face="bold", size=12, hjust=0.5), legend.position="bottom", legend.title=element_blank())
+
+grid.arrange(bar_plot1, bar_plot0, ncol=2)
+```
+
+plot이 잘리는 문제가 발생해서 code chunk 시작 부분에 fig.width=15, fig.height=6 넣어줌
+
+### 문제 5.
+```{r ch1_q5_dfSplit}
+# num_cols: 수치형 자료 변수 이름 벡터
+num_cols <- data %>% select(where(is.numeric)) %>% colnames
+
+stroke1_df <- data %>% select(all_of(num_cols), "stroke") %>%
+  filter(stroke==1) %>% gather(key="variable", value="value", -stroke) %>% 
+  select(-stroke)
+stroke0_df <- data %>% select(all_of(num_cols), "stroke") %>%
+  filter(stroke==0) %>% gather(key="variable", value="value", -stroke) %>%
+  select(-stroke)
+
+# gather()의 결과 확인
+stroke1_df %>% head(10)
+stroke0_df %>% head(10)
+```
+
+
+```{r ch1_q5_visualization, fig.width=10, fig.height=6}
+density_plot1 <- stroke1_df %>% ggplot(aes(x=value, color=variable))+
+  geom_density()+
+  ggtitle("Stroke: 1", )+
+  xlab("variable")+
+  ylab("density")+
+  theme_classic()+
+  theme(plot.title=element_text(face="bold", size=12, hjust=0.5), legend.title=element_blank())
+
+density_plot0 <- stroke0_df %>% ggplot(aes(x=value, color=variable))+
+  geom_density()+
+  ggtitle("Stroke: 0", )+
+  xlab("variable")+
+  ylab("density")+
+  theme_classic()+
+  theme(plot.title=element_text(face="bold", size=12, hjust=0.5), legend.title=element_blank())
+
+grid.arrange(density_plot1, density_plot0, nrow=2)
+```
+
+### 문제 6.
+```{r ch1_q6_chiSq,  warning=FALSE}
+chi_df <- data.frame(cate_var=rep(NA,7), chi=rep(NA,7))
+
+categorical_df <- data %>% select(all_of(factor_cols)) %>% as.data.frame
+
+for(i in 1:7)
+{
+  x <- categorical_df[,i]
+  y <- data$stroke
+  result <- chisq.test(x,y)
+  chi_df$cate_var[i] <- colnames(categorical_df)[i]
+  chi_df$chi[i] <- ifelse(result$p.value<0.05, "denied", "accept")
+}
+
+chi_df
+```
+
+### 문제 7
+```{r ch1_q7_removeVariables}
+accept_var <- chi_df[which(chi_df[,2]=="accept"),1]
+data <- data %>% select(-all_of(accept_var))
+```
+
+### [Test data(test.csv) 전처리]
+### 문제 8.
+```{r ch1_q8_testEDA, warning=FALSE}
+test$bmi <- test$bmi %>% as.numeric # bmi 변수 numeric으로 바꾸기
+test$bmi <- test$bmi %>% replace_na(., mean(., na.rm=TRUE)) # mean imputation #tidyverse의 replace_na() 이용
+
+char_cols <- test %>% select(is.character) %>% colnames # character형 변수명 뽑아내기
+test[,char_cols] <- test %>% select(where(is.character)) %>% lapply(as.factor) # character형 변수를 factor로 바꾼 후 data 업데이트
+
+test <- test %>% select(-"id") # test의 id 변수 제거, tidyverse(dplyr)의 select 이용
+
+test$heart_disease <- test$heart_disease %>% as.factor
+test$hypertension <- test$hypertension %>% as.factor
+
+test <- test %>% select(-all_of(accept_var))
+```
+
+
+## Chapter 3. K-means Clustering
+
+```{r ch3_setting}
+library(factoextra)
+library(cluster)
+```
+
+### 문제 1.
+```{r ch3_q1_scaling}
+data_scaled <- data %>% select(where(is.numeric)) %>% scale
+```
+
+### 문제 2.
+```{r ch3_q2_visualization, fig.width=15, fig.height=4}
+k_plot1 <- data_scaled %>% fviz_nbclust(kmeans, method="wss")
+k_plot2 <- data_scaled %>% fviz_nbclust(kmeans, method="silhouette")
+grid.arrange(k_plot1, k_plot2, ncol=2)
+```
+### 문제 3. k-means clustering을 한 후, 시각화
+```{r ch3_q3_kmeans, fig.width=6, fig.height=5}
+set.seed(1234)
+kmeans_result <- data_scaled %>% kmeans(center=3, nstart=1, iter.max=30)
+fviz_cluster(kmeans_result, data=data_scaled, ggtheme=theme_classic())
+```
+
+## 문제 4.
+```{r ch3_q4_visualization, fig.width=8, fig.height=4}
+cluster_df <- cbind(data, cluster=as.factor(kmeans_result$cluster)) # cluster factor 처리 해줘야 함
+
+plot_age <- cluster_df %>% ggplot(aes(x=cluster, y=age, group=cluster, color=cluster, fill=cluster))+
+  geom_boxplot(outlier.shape = NA, alpha=0.5, lwd=0.3)+
+  stat_boxplot(geom="errorbar", alpha=0.5, lwd=0.3)+
+  scale_fill_manual(breaks=c(1, 2, 3), values=c("#845ec2", "#ffc75f", "#ff5e78"))+
+  scale_color_manual(breaks=c(1, 2, 3), values=c("#845ec2", "#ffc75f", "#ff5e78"))+
+  theme_classic()+
+  theme(legend.position="none")
+  
+plot_glucose <- cluster_df %>% ggplot(aes(x=cluster, y=avg_glucose_level, group=cluster, color=cluster, fill=cluster))+
+  geom_boxplot(outlier.shape = NA, alpha=0.5, lwd=0.3)+
+  stat_boxplot(geom="errorbar", lwd=0.3)+
+  scale_fill_manual(breaks=c(1, 2, 3), values=c("#845ec2", "#ffc75f", "#ff5e78"))+
+  scale_color_manual(breaks=c(1, 2, 3), values=c("#845ec2", "#ffc75f", "#ff5e78"))+
+  theme_classic()+
+  theme(legend.position="none")
+
+plot_bmi <- cluster_df %>% ggplot(aes(x=cluster, y=bmi, group=cluster, color=cluster, fill=cluster))+
+  geom_boxplot(outlier.shape = NA, alpha=0.5, lwd=0.3)+
+  stat_boxplot(geom="errorbar", alpha=0.5, lwd=0.3)+
+  scale_fill_manual(breaks=c(1, 2, 3), values=c("#845ec2", "#ffc75f", "#ff5e78"))+
+  scale_color_manual(breaks=c(1, 2, 3), values=c("#845ec2", "#ffc75f", "#ff5e78"))+
+  theme_classic()+
+  theme(legend.position="none")
+
+grid.arrange(plot_age, plot_glucose, plot_bmi, ncol=3)
+```
+
+

@@ -1,0 +1,300 @@
+---
+title: "2주차 패키지"
+author: "통계학과 2019313106 홍현경"
+date: '2021년 3월 18일'
+output: html_document
+---
+## Chapter 1. 모델링을 위한 전처리
+### 문제 0. 기본 세팅
+* Chapter 1에서 쓸 패키지인 tidyverse, data.table, VIM을 불러옵니다.
+```{r ch1_setting, message=FALSE}
+library(tidyverse)
+library(data.table)
+library(VIM)
+```
+
+* 읽어들일 파일이 있는 위치로 경로를 설정합니다.
+```{r q0_directory}
+setwd("/Users/hyungyeonghong/Desktop/P-Sat/week2/week2_package")
+```
+
+* Working directory 설정까지 완료하였으니 이제 사용할 데이터를 불러옵니다.
+```{r q0_readFile, warning=FALSE}
+data <- fread("data.csv")
+```
+
+* 부가적으로, dim()을 이용하여 변수의 개수와 관찰값의 개수를 확인하고, str()을 이용하여 불러온 데이터가 가진 변수들을 확인하겠습니다.
+```{r q0_dataStructure}
+# checking the dimension
+data %>% dim
+# checking the structure
+data %>% str
+```
+총 43개의 변수와 301개의 관찰값이 있는 것을 확인할 수 있습니다.
+
+### 문제 1. '2'로 끝나는 변수 모두 제거
+* contains()와 ends_with()를 이용하여 '2'로 끝나는 변수들을 제외한 나머지 변수들만 뽑아내어 data에 저장합니다.
+```{r q1_removeVariables}
+data <- data %>% select(-ends_with("2"))
+```
+
+* dim()을 이용하여 변수가 제거되었는지 확인합니다.
+```{r q1_dataDimension}
+data %>% dim
+```
+data의 변수의 개수가 40개에서 23개로 줄어든 것을 보아, 변수들이 삭제되었음을 확인할 수 있습니다.
+
+* str()을 이용하여 '2'로 끝나는 변수들이 모두 삭제되었는지 최종적으로 확인하겠습니다.
+```{r q1_dataStructure}
+data %>% str
+```
+문제 0에서 확인한 str()의 결과와는 달리 '2'로 끝나는 변수들이 모두 삭제된 것을 확인할 수 있습니다.
+
+### 문제 2. 'VIM'패키지를 이용하여 data 시각화
+VIM 패키지를 이용하면 missing/imputed values를 시각화할 수 있습니다. VIM 패키지를 이용하여 data의 missing/imputed values를 확인해보겠습니다.
+
+* missing/imputed values를 시각화하여 확인하기 위해 VIM 패키지의 aggr() 함수를 이용합니다.
+  * col=c("lightyellow","pink"): 결측 값이 없는 셀의 색을 lightyellow, 결측 값이 있는 셀의 색깔을 pink로 변경합니다.
+  * numbers=TRUE: 결측 값의 개수를 숫자로 출력합니다.
+  * prop=FALSE: 비율이 아닌 빈도로 출력합니다. (prop=TRUE이면 비율로 출력)
+  * cex.lab=0.7: 라벨의 글자 크기를 0.7로 조정합니다.
+  * cex.axis=0.5: 축에 붙은 변수명의 글자 크기를 0.5로 조정합니다.
+  * cex.numbers=0.7: 그래프의 우측에 붙은 numbers의 글자 크기를 0.7로 조정합니다.
+```{r q2_vim}
+data %>% aggr(col=c("lightyellow","pink"), numbers=TRUE, prop=FALSE, cex.lab=0.7, cex.axis=0.5, cex.numbers=0.7)
+```
+
+[해석] 왼쪽의 그래프는 각 변수의 결측치 수, 오른쪽 표는 각 변수별 결측치의 조합을 나타냅니다. 왼쪽 그래프부터 보겠습니다. OC변수를 제외한 모든 변수에 결측치가 존재함을 확인할 수 있습니다. employee1의 결측치 개수는 10개, ownerChange 변수의 결측치 개수는 12개입니다. 그 이외의 변수들의 결측치 개수는 8개입니다. 이번에는 오른쪽 표를 보겠습니다. 앞에서 언급한 바와 같이 이 표는 변수별 결측치의 조합을 보여줍니다. 행을 기준으로 그래프를 보겠습니다. 맨 윗줄은 OC, employee1, ownerChange변수에 각각 결측치가 존재하는 행의 개가 1개임을 보여줍니다. 두번째 줄은 OC와 bedCount 변수를 제외한 나머지 변수에 모두 결측치가 존재하는 행이 2개임을 보여줍니다. 이처럼, 왼쪽의 표는 분홍색으로 표시된 행에 결측치가 존재하는 행이 모두 몇개 있는지를 표 우측의 숫자들을 통해 보여줍니다. 
+
+### 문제 3-1. NA imputatuon: 숫자 데이터의 NA값을 mean imputation을 통해 채우기
+mean imputation은 특정 변수의 결측치를 해당 변수의 결측치를 제외한 값의 mean으로 대체합니다.
+
+* replace_na(., lapply(., mean, na.rm=TRUE)): tidyr의 replace_na()를 이용하여 결측치를 대체합니다. 이떄, .에 해당하는 부분은 data입니다. 리스트의 각 원소들은 순서대로 각 변수의 결측치를 대체합니다.
+* 현재 data에는 범주형 데이터 역시 존재하기 때문에 해당 코드 실행시 argument is not numeric or logical: returning NAargument is not numeric or logical: returning NA라는 메시지가 함께 출력됩니다. 그러나 NA값에 다시 NA가 들어간 것이기 때문에 따로 처리를 하지는 않았습니다.
+```{r q3_1_meanImputation, warning=FALSE}
+data <- data %>% replace_na(., lapply(., mean, na.rm=TRUE))
+```
+
+* 숫자 데이터의 mean imputation 결과를 확인합니다.
+* is.na()를 lapply()를 통해 각 변수에 적용하여 NA값 해당 여부를 TRUE/FALSE로 확인합니다. TRUE == 1, FALSE == 0이므로 lapply(is.na) 결과의 각 변수별로 sapply()를 통해 sum()을 적용한 결과가 0이면 NA값이 모두 채워진 것입니다. 
+* sapply()를 이용하여 sum()의 결과를 벡터로 출력함으로써 결과를 한눈에 알아보기 쉽도록 하였습니다.
+```{r q3_1_checkMeanImputation}
+data %>% lapply(is.na) %>% sapply(sum)
+```
+범주형 데이터인ownerChange를 제외한 각 변수의 합산 결과가 0인 것으로 보아 숫자 데이터의 결측치가 모두 채워졌음을 알 수 있습니다.
+
+### 문제 3-2. NA imputatuion: 범주 데이터의 NA값을 mode imputation을 통해 채우기
+mode imputation은 특정 변수의 결측치를 해당 변수의 최빈값(mode)으로 대체합니다.
+
+* 앞의 결과로부터 범주형 데이터인 ownerChange 변수에 12개의 결측치가 있음을 알 수 있습니다.
+* 따라서 이 문제에서는 ownerChange 변수의 결측치를 처리하도록 하겠습니다.
+* table %>% which.max %>% labels: 범주형 데이터의 테이블을 이용하여 최빈값의 라벨 리스트를 뽑아냅니다.
+* replace_na(data$ownerChange, .): tidyr의 replace_na()를 이용하여 결측치를 대체합니다. 이떄, .에 해당하는 부분은 table %>% which.max %>% labels에서 나온 최빈값 라벨 리스트입니다.
+```{r q3_2_modeImputation}
+data$ownerChange <- data$ownerChange %>% table %>% which.max %>% labels %>% replace_na(data$ownerChange, .)
+```
+
+* 범주형 데이터의 mode imputation 결과를 확인합니다.
+* is.na()를 lapply()를 통해 각 변수에 적용하여 NA값 해당 여부를 TRUE/FALSE로 확인합니다. TRUE == 1, FALSE == 0이므로 lapply(is.na) 결과의 각 변수별로 sapply()를 통해 sum()을 적용한 결과가 0이면 NA값이 모두 채워진 것입니다. 
+* sapply()를 이용하여 sum()의 결과를 벡터로 출력함으로써 결과를 한눈에 알아보기 쉽도록 하였습니다.
+```{r q3_2_checkModeImputation}
+data %>% lapply(is.na) %>% sapply(sum)
+```
+각 변수의 합산 결과가 0인 것으로 보아 숫자 데이터의 결측치가 모두 채워졌음을 알 수 있습니다.
+범주형 변수로 이번 문제의 변환 대상이었던 ownerChange 변수 역시 결측치가 모두 채워졌음을 알 수 있습니다.
+
+### 문제 4. 변수 OC의 "open"을 1, "close"를 0으로 바꾸기
+* dplyr 패키지의 recode()를 이용하여 변수 OC의 "open"을 1, "close"를 0으로 바꾸었습니다.
+```{r q4_recode}
+data$OC <- recode(data$OC, "open"=1, "close"=0)
+data$OC # 값이 바뀌었는지 확인합니다.
+``` 
+"open"=1, "close"=0으로 변환이 되었음을 확인할 수 있습니다.
+
+### 문제 5. 숫자 데이터 중 integer 자료형을 numeric 자료형으로 바꾸기
+* ownerChange를 제외한 나머지 변수를 추출한 후 numeric으로 변환합니다. 이후 dplyr의 bind_cols()를 이용하여 기존의 범주형 데이터인 ownerChange를 합쳐줍니다.
+```{r q5_typeConversion}
+data <- data[,c(1:22)] %>% lapply(as.numeric) %>% bind_cols(.,ownerChange = data$ownerChange)
+data %>% str # 변환이 제대로 되었는지 확인합니다.
+```
+
+ownerChange를 제외한 나머지 변수가 num인 것을 확인할 수 있습니다.
+
+## Chapter 2. 분류모델
+## [모델 1] 로지스틱 회귀
+### 문제 1. 전처리한 데이터를 train과 validation set으로 나누기
+```{r ch2_setting, message=FALSE}
+library(caret)
+library(MLmetrics)
+library(randomForest)
+```
+
+* createDataPartition을 이용하여 데이터를 train과 validation set으로 나눕니다.
+* 로지스틱 회귀의 종속 변수는 범주형 데이터이고, 두 개의 possible outcomes를 가집니다. 따라서 타겟 변수는 OC로 설정합니다.
+```{r ch2_q1_dataPartition}
+set.seed(1234)
+
+train_idx <- createDataPartition(data$OC, p=0.3, list=FALSE)
+train_data <- data[-train_idx,]
+valid_data <- data[train_idx,]
+```
+
+### 문제 2. train 데이터의 모든 변수를 이용하여 OC를 타겟으로 하는 로지스틱 회귀를 만들고 validation set의 accuracy 구하기
+* 우선, 로지스틱 회귀 모형을 만드는 glm()을 이용하여 로지스틱 회귀 모형을 fit 합니다.
+* 로지스틱 회귀 모형 추정에는 train데이터를 이용하며, 타겟 변수는 OC입니다.
+```{r q2_logisticFit, warning=FALSE}
+logit_fit <- glm(formula=OC~., data=train_data, family=binomial)
+summary(logit_fit)
+```
+
+* fit한 로지스틱 회귀모형을 validation set을 이용하여 평가합니다.
+* fit한 로지스틱 회귀모형을 이용하여 예측한 값이 0.5 이상이면 1, 0.5 미만이면 0을 부여합니다.
+* 이를 바탕으로 validation set의 예측값과 실제값을 바탕으로 MLmetrics의 Accuracy()를 이용하여 accuracy를 측정합니다.
+```{r q2_logisticPredict}
+logit_predict <- predict(logit_fit, valid_data, type="response")
+predict_true <- ifelse(logit_predict >= 0.5, 1, 0)
+Accuracy(predict_true, valid_data$OC) # accuracy 값을 구합니다.
+```
+
+### 문제 3. 단계적 선택법을 이용하여 변수를 선택한 후 로지스틱 회귀 모형 만들고 validation set 이용하여 accuracy 구하기
+
+* 앞 문제에서 구한 회귀모형에 step()을 적용하여 변구를 선택합니다.
+* AIC 값이 가장 작은 변수의 조합을 선택합니다.
+```{r q3_variableSelection, warning=FALSE}
+var_select <- step(logit_fit, direction="both")
+formula_select <- formula(var_select)
+```
+
+따라서, 최소의 AIC를 가지는 조합인 OC ~ revenue1 + salescost1 + noi1 + interest1 + quickAsset1 + receivableS1 + nonCAsset1 + tanAsset1 + receivableL1 + ownerChange를 이용합니다.
+
+* 단계적선택법을 이용하여 선택한 변수들을 이용하여 로지스틱 회귀모형을 다시 fit 합니다. 역시 training set을 이용합니다
+```{r q3_logisticReFit, warning=FALSE}
+logit_refit <- glm(formula_select, data=train_data, family="binomial")
+summary(logit_refit)
+```
+
+* 다시 fit한 로지스틱 회귀모형을 validation set을 이용하여 평가합니다.
+* 다시 fit한 로지스틱 회귀모형을 이용하여 예측한 값이 0.5 이상이면 1, 0.5 미만이면 0을 부여합니다.
+* 이를 바탕으로 validation set의 예측값과 실제값을 바탕으로 MLmetrics의 Accuracy()를 이용하여 accuracy를 측정합니다.
+```{r q3_logitRePredict}
+logit_repredict <- predict(logit_refit, valid_data, type="response")
+repredict_true <- ifelse(logit_repredict >= 0.5, 1, 0)
+Accuracy(repredict_true, valid_data$OC)
+```
+accuracy가 이전에 비해 오른 것을 확인할 수 있습니다.
+
+## [모델 2] 랜덤포레스트
+### 문제 4. mtry에 대한 그리드서치를 위해 expand.grid를 이용하여 데이터프레임 만들기
+* 문제에서 주어진대로 mtry는 3:5, acc는 NA로 설정합니다.
+```{r q4_expandGrid}
+acc_rf <- expand.grid(mtry=3:5, acc=NA); acc_rf
+```
+### 문제 5. 로지스틱회귀에서 선택된 변수들로 랜덤포레스트에 대한 5-fold 그리드서치를 진행, acc_rf의 acc변수에 해당 Accuracy값 넣기
+* caret 패키지의 createFolds()를 이용하여 전체 데이터를 5개로 나눕니다. 
+```{r q5_randomForest, warning=FALSE}
+set.seed(1234)
+
+num <- vector(mode="numeric", length=5)
+
+for (i in 1:3){
+  for (j in 1:5){
+    folds <-createFolds(train_data$OC, k=5, list=TRUE)
+    test_idx<-folds[[j]]
+    cv_train_data <- train_data[-test_idx,]
+    cv_test_data <- train_data[test_idx,]
+    rf_fit <- randomForest(formula_select, data=cv_train_data, mtry=acc_rf[i,1], ntree=10)
+    prediction <- predict(rf_fit,cv_test_data)
+    predict_true <- ifelse(prediction >= 0.5, 1, 0)
+    num[j] <- Accuracy(predict_true, cv_test_data$OC)
+  } 
+  acc_rf$acc[i]<-mean(num)
+}
+
+acc_rf
+```
+
+
+### 문제 6. acc_rf에서 가장 높은 Accuracy값의 행 출력
+```{r q6_maxAccuracy}
+acc_rf[which.max(acc_rf$acc), ]
+```
+### 문제 7. 가장 좋은 파라미터 조합으로 랜덤포레스트 모델을 학습시킨 후 varlmPlot과 ggplot을 이용해 시각화하기
+```{r q7_randomForestVisualization, warning=FALSE}
+set.seed(1234)
+
+rf_refit <- randomForest(formula_select, data=valid_data, mtry=4, ntree=10)
+varImpPlot(rf_refit)
+
+rf_imp <- importance(rf_refit) %>% as.data.frame
+
+ggplot(data=rf_imp,
+       mapping=aes(x=reorder(rownames(rf_imp), IncNodePurity), y=IncNodePurity))+
+  geom_point(color="pink")+
+  geom_segment(aes(x=rownames(rf_imp),xend=rownames(rf_imp),y=0,yend=IncNodePurity), color="pink")+
+  labs(x="Variable Name", y="MeanDecreaseGini")+
+  coord_flip()+
+  theme_classic()
+```
+
+varImpPlot()을 이용하였더니 각 변수의 IncNodePurity 값이 출력되었습니다. 이때, IncNodePurity는 각 변수가 전체 예측 결과를 얼마나 향상시키는지를 나타내는 지표로 이해할 수 있습니다. 즉, 우리가 만든 랜덤포레스트 모델에서 차지하는 중요도를 나타내는 값 입니다. 최종 랜덤포레스트 모델을 학습시킬 때 OC ~ revenue1 + salescost1 + noi1 + interest1 + quickAsset1 + receivableS1 + nonCAsset1 + tanAsset1 + receivableL1 + ownerChange를 변수의 조합으로 사용하였습니다. ggplot을 이용한 각 변수의 중요도를 보았을 때, 이 모델에서는 revenue1이 가장 큰 중요도를 차지하고, receivableL1이 가장 낮은 중요도를 가짐을 알 수 있습니다. 
+
+## Chapter 3. 회귀모델
+### 문제 1. Boston 데이터를 8:2로 train과 test set으로 나누기
+```{r ch3_setting, message=FALSE}
+library(MASS)
+# library(caret)
+# library(MLmetrics)
+# library(randomForest)
+```
+
+* caret 패키지의 createDataPartition()을 이용하여 train과 test set을 나눕니다.
+* 타겟변수는 medv이며, p=0.2로 설정합니다 .
+```{r ch3_q1_dataPartition}
+data <- Boston
+train_idx <- createDataPartition(data$medv, p=0.2, list=FALSE)
+train_data <- data[-train_idx,]
+valid_data <- data[train_idx,]
+```
+
+### 문제 2. expand.grid()를 이용라여 데이터 프레임 만들기
+```{r q2_expandGrid}
+RMSE_rf <- expand.grid(mtry=3:5, ntree=c(10,100,200), RMSE=NA); RMSE_rf
+```
+
+### 문제 3. medv를 종속변수로 하는 랜덤포레스트에 대한 5-fold 그리드서치 진행, RMSE_rf의 RMSE변수에 해당 RMSE값 넣기
+```{r q3_randomForest}
+set.seed(1234)
+
+num <- vector(mode="numeric", length=5)
+
+for (i in 1:9){
+  for (j in 1:5){
+    folds <-createFolds(train_data$medv, k=5, list=TRUE)
+    test_idx<-folds[[j]]
+    cv_train_data <- train_data[-test_idx,]
+    cv_test_data <- train_data[test_idx,]
+    rf_fit <- randomForest(medv~., data=cv_train_data, ntree=RMSE_rf[i,2], mtry=RMSE_rf[i,1])
+    prediction <- predict(rf_fit,cv_test_data)
+    num[j]<-RMSE(prediction, cv_test_data$medv)
+  } 
+  RMSE_rf$RMSE[i]<-mean(num)
+}
+
+RMSE_rf
+```
+
+### 문제 4. RMSE_rf에서 가장 낮은 RMSE값을 가진 행 출력
+```{r q4_minRMSE}
+RMSE_rf[which.min(RMSE_rf$RMSE), ]
+```
+
+### 문제 5. train set으로 그리드 서치로 나온 가장 좋은 조합의 파라미터의 랜덤포레스트 학습 후 test set의 RMSE 구하기
+```{r q5_randomForestReFit}
+set.seed(1234)
+
+rf_refit <- randomForest(medv~., data=valid_data, mtry=5, ntree=100)
+
+prediction <- predict(rf_refit, valid_data)
+RMSE(valid_data$medv, prediction)
+```
+
